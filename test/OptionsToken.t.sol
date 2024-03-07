@@ -11,6 +11,7 @@ import {OptionsToken} from "../src/OptionsToken.sol";
 import {DiscountExerciseParams, DiscountExercise, BaseExercise} from "../src/exercise/DiscountExercise.sol";
 import {TestERC20} from "./mocks/TestERC20.sol";
 import {BalancerOracle} from "../src/oracles/BalancerOracle.sol";
+import {IOracle} from "../src/interfaces/IOracle.sol";
 import {MockBalancerTwapOracle} from "./mocks/MockBalancerTwapOracle.sol";
 
 contract OptionsTokenTest is Test {
@@ -32,7 +33,7 @@ contract OptionsTokenTest is Test {
 
     OptionsToken optionsToken;
     DiscountExercise exerciser;
-    BalancerOracle oracle;
+    IOracle[] oracles;
     MockBalancerTwapOracle balancerTwapOracle;
     TestERC20 paymentToken;
     address underlyingToken;
@@ -66,10 +67,10 @@ contract OptionsTokenTest is Test {
 
         balancerTwapOracle = new MockBalancerTwapOracle(tokens);
         console.log(tokens[0], tokens[1]);
-        oracle = new BalancerOracle(balancerTwapOracle, underlyingToken, owner, ORACLE_SECS, ORACLE_AGO, ORACLE_MIN_PRICE);
+        oracles.push(new BalancerOracle(balancerTwapOracle, underlyingToken, owner, ORACLE_SECS, ORACLE_AGO, ORACLE_MIN_PRICE));
 
         exerciser =
-        new DiscountExercise(optionsToken, owner, IERC20(address(paymentToken)), IERC20(underlyingToken), oracle, PRICE_MULTIPLIER, feeRecipients_, feeBPS_);
+        new DiscountExercise(optionsToken, owner, IERC20(address(paymentToken)), IERC20(underlyingToken), oracles, PRICE_MULTIPLIER, feeRecipients_, feeBPS_);
 
         TestERC20(underlyingToken).mint(address(exerciser), 1e20 ether);
 
@@ -172,7 +173,7 @@ contract OptionsTokenTest is Test {
         exerciser.setMultiplier(multiplier);
 
         // exercise options tokens
-        uint256 newPrice = oracle.getPrice().mulDivUp(multiplier, 10000);
+        uint256 newPrice = oracles[0].getPrice().mulDivUp(multiplier, 10000);
         uint256 newExpectedPaymentAmount = amount.mulWadUp(newPrice);
         params.maxPaymentAmount = newExpectedPaymentAmount;
 
@@ -215,7 +216,7 @@ contract OptionsTokenTest is Test {
         // such that the TWAP window becomes (block.timestamp - ORACLE_LARGEST_SAFETY_WINDOW - ORACLE_SECS, block.timestamp - ORACLE_LARGEST_SAFETY_WINDOW]
         // which is outside of the largest safety window
         vm.prank(owner);
-        oracle.setParams(ORACLE_SECS, ORACLE_LARGEST_SAFETY_WINDOW, ORACLE_MIN_PRICE);
+        BalancerOracle(address(oracles[0])).setParams(ORACLE_SECS, ORACLE_LARGEST_SAFETY_WINDOW, ORACLE_MIN_PRICE);
 
         // exercise options tokens which should fail
         DiscountExerciseParams memory params = DiscountExerciseParams({maxPaymentAmount: expectedPaymentAmount, deadline: type(uint256).max});

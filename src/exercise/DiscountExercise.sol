@@ -9,6 +9,7 @@ import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 import {BaseExercise} from "../exercise/BaseExercise.sol";
 import {IOracle} from "../interfaces/IOracle.sol";
 import {OptionsToken} from "../OptionsToken.sol";
+import "forge-std/console.sol";
 
 struct DiscountExerciseParams {
     uint256 maxPaymentAmount;
@@ -33,7 +34,7 @@ contract DiscountExercise is BaseExercise {
 
     /// Events
     event Exercised(address indexed sender, address indexed recipient, uint256 amount, uint256 paymentAmount);
-    event SetOracle(IOracle indexed newOracle);
+    event SetOracles(IOracle[] indexed newOracles);
     event SetTreasury(address indexed newTreasury);
     event SetMultiplier(uint256 indexed newMultiplier);
 
@@ -53,9 +54,9 @@ contract DiscountExercise is BaseExercise {
 
     /// Storage variables
 
-    /// @notice The oracle contract that provides the current price to purchase
+    /// @notice The oracle contract(s) that provides the current price to purchase
     /// the underlying token while exercising options (the strike price)
-    IOracle public oracle;
+    IOracle[] public oracles;
 
     /// @notice The multiplier applied to the TWAP value. Encodes the discount of
     /// the options token. Uses 4 decimals.
@@ -70,7 +71,7 @@ contract DiscountExercise is BaseExercise {
         address owner_,
         IERC20 paymentToken_,
         IERC20 underlyingToken_,
-        IOracle oracle_,
+        IOracle[] memory oracles_,
         uint256 multiplier_,
         address[] memory feeRecipients_,
         uint256[] memory feeBPS_
@@ -78,10 +79,10 @@ contract DiscountExercise is BaseExercise {
         paymentToken = paymentToken_;
         underlyingToken = underlyingToken_;
 
-        _setOracle(oracle_);
+        _setOracles(oracles_);
         _setMultiplier(multiplier_);
 
-        emit SetOracle(oracle_);
+        emit SetOracles(oracles_);
     }
 
     /// External functions
@@ -111,18 +112,37 @@ contract DiscountExercise is BaseExercise {
 
     /// Owner functions
 
-    /// @notice Sets the oracle contract. Only callable by the owner.
-    /// @param oracle_ The new oracle contract
-    function setOracle(IOracle oracle_) external onlyOwner {
-        _setOracle(oracle_);
+    /// @notice Sets the oracle contracts. Only callable by the owner.
+    /// @param oracles_ The new oracle contract(s)
+    function setOracles(IOracle[] memory oracles_) external onlyOwner {
+        _setOracles(oracles_);
     }
 
-    function _setOracle(IOracle oracle_) internal {
-        (address paymentToken_, address underlyingToken_) = oracle_.getTokens();
-        if (paymentToken_ != address(paymentToken) || underlyingToken_ != address(underlyingToken))
-            revert Exercise__InvalidOracle();
-        oracle = oracle_;
-        emit SetOracle(oracle_);
+    function _setOracles(IOracle[] memory oracles_) internal {
+        uint256 length = oracles_.length;
+        address[] memory tokens = new address[](length);
+
+        // check if oracles lead to the underlying token
+        for (uint256 i = 0; i < length; i++) {
+            (address tokenIn, address tokenOut) = oracles_[i].getTokens();
+
+            if (i == 0) {
+                if (tokenIn != address(paymentToken))
+                    revert Exercise__InvalidOracle();
+            }
+            else {
+                if (tokenIn != tokens[i - 1])
+                    revert Exercise__InvalidOracle();
+            }
+            if (i == length - 1) {
+                if (tokenOut != address(underlyingToken))
+                    revert Exercise__InvalidOracle();
+            } else {
+                tokens[i] = tokenOut;
+            }
+        }
+        oracles = oracles_;
+        emit SetOracles(oracles_);
     }
 
     /// @notice Sets the discount multiplier.
@@ -152,10 +172,7 @@ contract DiscountExercise is BaseExercise {
 
         if (block.timestamp > _params.deadline) revert Exercise__PastDeadline();
 
-        // apply multiplier to price
-        uint256 price = oracle.getPrice().mulDivUp(multiplier, MULTIPLIER_DENOM);
-
-        paymentAmount = amount.mulWadUp(price);
+        paymentAmount = _getPaymentAmount(amount);
         if (paymentAmount > _params.maxPaymentAmount) revert Exercise__SlippageTooHigh();
 
         // transfer payment tokens from user to the set receivers
@@ -179,9 +196,25 @@ contract DiscountExercise is BaseExercise {
 
     /// View functions
 
+    function _getPaymentAmount(uint256 amount) internal view returns (uint256 paymentAmount) {
+        uint256 price;
+        // get price from oracle(s)
+        for (uint256 i = 0; i < oracles.length; i++) {
+            if (i == 0) {
+                price = oracles[i].getPrice(); 
+            } else {
+                price = oracles[i].getPrice().mulWadUp(price);
+            }
+        }
+        // apply multiplier to price
+        price = price.mulDivUp(multiplier, MULTIPLIER_DENOM);
+
+        paymentAmount = amount.mulWadUp(price);
+    }
+
     /// @notice Returns the amount of payment tokens required to exercise the given amount of options tokens.
     /// @param amount The amount of options tokens to exercise
-    function getPaymentAmount(uint256 amount) external view returns (uint256 paymentAmount) {
-        paymentAmount = amount.mulWadUp(oracle.getPrice().mulDivUp(multiplier, MULTIPLIER_DENOM));
+    function getPaymentAmount(uint256 amount) external view returns (uint256) {
+        return _getPaymentAmount(amount);
     }
 }
