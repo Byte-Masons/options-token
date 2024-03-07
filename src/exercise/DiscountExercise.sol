@@ -9,7 +9,6 @@ import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 import {BaseExercise} from "../exercise/BaseExercise.sol";
 import {IOracle} from "../interfaces/IOracle.sol";
 import {OptionsToken} from "../OptionsToken.sol";
-import "forge-std/console.sol";
 
 struct DiscountExerciseParams {
     uint256 maxPaymentAmount;
