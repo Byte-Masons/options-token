@@ -280,4 +280,67 @@ contract OptionsTokenTest is Test {
         vm.expectRevert(OptionsToken.OptionsToken__NotExerciseContract.selector);
         optionsToken.exercise(amount, recipient, address(exerciser), abi.encode(params));
     }
+
+    function test_multihopOracles(uint256 amount, address recipient, uint256 twap1, uint256 twap2) public {
+        IOracle[] memory hopOracles = new IOracle[](2);
+        MockBalancerTwapOracle[] memory mockTwaps = new MockBalancerTwapOracle[](2);
+        TestERC20 intermediateToken = paymentToken;
+        paymentToken = new TestERC20();
+
+        uint256[2] memory ORACLE_MULTIHOP_TWAPS;
+        ORACLE_MULTIHOP_TWAPS[0] = bound(twap1, ORACLE_MIN_PRICE, 1e30);
+        ORACLE_MULTIHOP_TWAPS[1] = bound(twap2, ORACLE_MIN_PRICE, 1e30);
+
+        address[] memory tokens1 = new address[](2);
+        tokens1[0] = address(paymentToken);
+        tokens1[1] = address(intermediateToken);
+        mockTwaps[0] = new MockBalancerTwapOracle(tokens1);
+        mockTwaps[0].setTwapValue(ORACLE_MULTIHOP_TWAPS[0]);
+
+        address[] memory tokens2 = new address[](2);
+        tokens2[0] = address(intermediateToken);
+        tokens2[1] = underlyingToken;
+        mockTwaps[1] = new MockBalancerTwapOracle(tokens2);
+        mockTwaps[1].setTwapValue(ORACLE_MULTIHOP_TWAPS[1]);
+
+        hopOracles[0] = new BalancerOracle(mockTwaps[0], address(intermediateToken), owner, ORACLE_SECS, ORACLE_AGO, ORACLE_MIN_PRICE);
+        hopOracles[1] = new BalancerOracle(mockTwaps[1], underlyingToken, owner, ORACLE_SECS, ORACLE_AGO, ORACLE_MIN_PRICE);
+
+        exerciser = new DiscountExercise(optionsToken, owner, IERC20(address(paymentToken)), IERC20(underlyingToken), hopOracles, PRICE_MULTIPLIER, feeRecipients_, feeBPS_);
+        TestERC20(underlyingToken).mint(address(exerciser), 1e20 ether);
+
+        // add exerciser to the list of options
+        vm.startPrank(owner);
+        optionsToken.setExerciseContract(address(exerciser), true);
+        vm.stopPrank();
+        
+        paymentToken.approve(address(exerciser), type(uint256).max);
+
+        // exerciseHappyPath
+        amount = bound(amount, 100, MAX_SUPPLY);
+
+        // mint options tokens
+        vm.prank(tokenAdmin);
+        optionsToken.mint(address(this), amount);
+
+        // mint payment tokens
+        uint256 expectedPaymentAmount = amount.mulWadUp(ORACLE_MULTIHOP_TWAPS[0].mulWadUp(ORACLE_MULTIHOP_TWAPS[1]).mulDivUp(PRICE_MULTIPLIER, ORACLE_MIN_PRICE_DENOM));
+        paymentToken.mint(address(this), expectedPaymentAmount);
+
+        // exercise options tokens
+        DiscountExerciseParams memory params = DiscountExerciseParams({maxPaymentAmount: expectedPaymentAmount, deadline: type(uint256).max});
+        (uint256 paymentAmount,,,) = optionsToken.exercise(amount, recipient, address(exerciser), abi.encode(params));
+
+        // verify options tokens were transferred
+        assertEqDecimal(optionsToken.balanceOf(address(this)), 0, 18, "user still has options tokens");
+        assertEqDecimal(optionsToken.totalSupply(), 0, 18, "option tokens not burned");
+
+        // verify payment tokens were transferred
+        assertEqDecimal(paymentToken.balanceOf(address(this)), 0, 18, "user still has payment tokens");
+        uint256 paymentFee1 = expectedPaymentAmount.mulDivDown(feeBPS_[0], 10000);
+        uint256 paymentFee2 = expectedPaymentAmount - paymentFee1;
+        assertEqDecimal(paymentToken.balanceOf(feeRecipients_[0]), paymentFee1, 18, "fee recipient 1 didn't receive payment tokens");
+        assertEqDecimal(paymentToken.balanceOf(feeRecipients_[1]), paymentFee2, 18, "fee recipient 2 didn't receive payment tokens");
+        assertEqDecimal(paymentAmount, expectedPaymentAmount, 18, "exercise returned wrong value");
+    }
 }
