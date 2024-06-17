@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 pragma solidity >=0.8.19;
 
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {IERC20} from "oz/token/ERC20/IERC20.sol";
 import {ud60x18} from "@prb/math/src/UD60x18.sol";
 import {ud2x18} from "@prb/math/src/UD2x18.sol";
 import {ISablierV2LockupLinear} from "@sablier/v2-core/src/interfaces/ISablierV2LockupLinear.sol";
@@ -99,10 +99,10 @@ abstract contract SablierStreamCreator {
         params.broker = Broker(address(0), ud60x18(0)); // Optional parameter left undefined
 
         // @note can't find a specific reference to Timelock in the docs
-        // @note however, creating a segment that is some small, arbitrary amount of seconds (20 here)
+        // @note however, creating a segment that is some small, arbitrary amount of seconds (1 here)
         /// after the unlockTime should stream all the tokens percentibly in one go
         params.segments = new LockupDynamic.Segment[](1);
-        params.segments[0] = LockupDynamic.Segment({amount: amount0_, exponent: ud2x18(1e18), milestone: unlockTime_ + 20 seconds});
+        params.segments[0] = LockupDynamic.Segment({amount: amount0_, exponent: ud2x18(1e18), milestone: unlockTime_ + 1 seconds});
 
         // Create the LockupDynamic stream
         streamId = LOCKUP_DYNAMIC.createWithMilestones(params);

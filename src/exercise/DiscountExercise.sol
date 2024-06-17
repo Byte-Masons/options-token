@@ -63,7 +63,7 @@ contract DiscountExercise is BaseExercise {
 
     /// @notice The amount of payment tokens the user can claim
     /// Used when the contract does not have enough tokens to pay the user
-    mapping (address => uint256) public credit;
+    mapping(address => uint256) public credit;
 
     constructor(
         OptionsToken oToken_,
@@ -119,8 +119,9 @@ contract DiscountExercise is BaseExercise {
 
     function _setOracle(IOracle oracle_) internal {
         (address paymentToken_, address underlyingToken_) = oracle_.getTokens();
-        if (paymentToken_ != address(paymentToken) || underlyingToken_ != address(underlyingToken))
+        if (paymentToken_ != address(paymentToken) || underlyingToken_ != address(underlyingToken)) {
             revert Exercise__InvalidOracle();
+        }
         oracle = oracle_;
         emit SetOracle(oracle_);
     }
