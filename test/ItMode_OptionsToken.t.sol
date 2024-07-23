@@ -52,7 +52,8 @@ contract ModeOptionsTokenTest is Test, Common {
 
         // set up accounts
         owner = makeAddr("owner");
-        tokenAdmin = makeAddr("tokenAdmin");
+        //tokenAdmin = makeAddr("tokenAdmin");
+        tokenAdmin = owner;
 
         uint256 minAmountToTriggerSwap = 1e5;
 

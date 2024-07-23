@@ -69,6 +69,7 @@ contract ItModeOptionsCompounder is Common {
 
         /* Oracle mocks deployment */
         oracle = fixture_getMockedOracle(exchangeType);
+        tokenAdmin = owner;
 
         /* Option token deployment */
         vm.startPrank(owner);

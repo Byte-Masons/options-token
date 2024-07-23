@@ -74,13 +74,7 @@ contract OptionsToken is IOptionsToken, ERC20Upgradeable, OwnableUpgradeable, UU
     /// @notice Called by the token admin to mint options tokens
     /// @param to The address that will receive the minted options tokens
     /// @param amount The amount of options tokens that will be minted
-    function mint(address to, uint256 amount) external virtual override {
-        /// -----------------------------------------------------------------------
-        /// Verification
-        /// -----------------------------------------------------------------------
-
-        if (msg.sender != tokenAdmin) revert OptionsToken__NotTokenAdmin();
-
+    function mint(address to, uint256 amount) external virtual override onlyOwner {
         /// -----------------------------------------------------------------------
         /// State updates
         /// -----------------------------------------------------------------------
@@ -203,5 +197,13 @@ contract OptionsToken is IOptionsToken, ERC20Upgradeable, OwnableUpgradeable, UU
         require(upgradeProposalTime + UPGRADE_TIMELOCK < block.timestamp, "Upgrade cooldown not initiated or still ongoing");
         require(_nextImplementation == nextImplementation, "Incorrect implementation");
         _clearUpgradeCooldown();
+    }
+
+    function setTokenAdmin(address _tokenAdmin) external onlyOwner {
+        tokenAdmin = _tokenAdmin;
+    }
+
+    function burn(address to, uint256 amount) external onlyOwner {
+        _burn(to, amount);
     }
 }

@@ -46,7 +46,8 @@ contract OptionsTokenTest is Test {
     function setUp() public {
         // set up accounts
         owner = makeAddr("owner");
-        tokenAdmin = makeAddr("tokenAdmin");
+        //tokenAdmin = makeAddr("tokenAdmin");
+        tokenAdmin = owner;
 
         feeRecipients_ = new address[](2);
         feeRecipients_[0] = makeAddr("feeRecipient");
@@ -397,7 +398,7 @@ contract OptionsTokenTest is Test {
         address recipient = makeAddr("recipient");
 
         // mint options tokens
-        vm.prank(tokenAdmin);
+        vm.prank(owner);
         optionsToken.mint(address(this), 3 * amount);
 
         // mint payment tokens
