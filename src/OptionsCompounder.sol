@@ -50,7 +50,6 @@ contract OptionsCompounder is IFlashLoanReceiver, OwnableUpgradeable, UUPSUpgrad
     uint256 public constant FUTURE_NEXT_PROPOSAL_TIME = 365 days * 100;
 
     /* Storages */
-    address public swapper;
     ILendingPoolAddressesProvider private addressProvider;
     ILendingPool private lendingPool;
     bool private flashloanFinished;
@@ -84,7 +83,6 @@ contract OptionsCompounder is IFlashLoanReceiver, OwnableUpgradeable, UUPSUpgrad
     function initialize(
         address _optionsToken,
         address _addressProvider,
-        address _swapper,
         SwapProps memory _swapProps,
         IOracle _oracle,
         address[] memory _strats
@@ -93,7 +91,6 @@ contract OptionsCompounder is IFlashLoanReceiver, OwnableUpgradeable, UUPSUpgrad
         _setOptionsToken(_optionsToken);
         _setSwapProps(_swapProps);
         _setOracle(_oracle);
-        _setSwapper(_swapper);
         _setStrats(_strats);
         flashloanFinished = true;
         _setAddressProvider(_addressProvider);
@@ -133,17 +130,6 @@ contract OptionsCompounder is IFlashLoanReceiver, OwnableUpgradeable, UUPSUpgrad
             revert OptionsCompounder__ParamHasAddressZero();
         }
         oracle = _oracle;
-    }
-
-    function setSwapper(address _swapper) external onlyOwner {
-        _setSwapper(_swapper);
-    }
-
-    function _setSwapper(address _swapper) internal {
-        if (_swapper == address(0)) {
-            revert OptionsCompounder__ParamHasAddressZero();
-        }
-        swapper = _swapper;
     }
 
     function setAddressProvider(address _addressProvider) external onlyOwner {
@@ -325,7 +311,7 @@ contract OptionsCompounder is IFlashLoanReceiver, OwnableUpgradeable, UUPSUpgrad
             minAmountOut = _getMinAmountOutData(balanceOfUnderlyingToken, swapProps.maxSwapSlippage, address(oracle));
 
             /* Approve the underlying token to make swap */
-            underlyingToken.approve(swapper, balanceOfUnderlyingToken);
+            underlyingToken.approve(swapProps.swapper, balanceOfUnderlyingToken);
 
             /* Swap underlying token to payment token (asset) */
             swapAmountOut = _generalSwap(
@@ -337,7 +323,7 @@ contract OptionsCompounder is IFlashLoanReceiver, OwnableUpgradeable, UUPSUpgrad
             }
 
             /* Approve the underlying token to 0 for safety */
-            underlyingToken.approve(swapper, 0);
+            underlyingToken.approve(swapProps.swapper, 0);
         }
 
         /* Calculate profit and revert if it is not profitable */
